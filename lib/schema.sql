@@ -23,3 +23,13 @@ create table if not exists api_keys (
   created_at timestamptz not null default now(),
   last_used_at timestamptz
 );
+
+create table if not exists notifications (
+  id bigserial primary key,
+  user_id uuid not null references users(id) on delete cascade,
+  title text not null,
+  body text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists notifications_user_id_idx on notifications (user_id, id);

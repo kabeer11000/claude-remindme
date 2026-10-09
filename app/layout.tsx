@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { auth } from "@/auth";
+import NotificationFeed from "./NotificationFeed";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,13 +20,19 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+// Checks the session to decide whether to mount the live notification feed.
+export const instant = false;
+
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const session = await auth();
+
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-neutral-950 text-neutral-100">
+        {session && <NotificationFeed />}
         {children}
       </body>
     </html>

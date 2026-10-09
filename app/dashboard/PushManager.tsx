@@ -137,6 +137,8 @@ export default function PushManager({ initialDevices }: { initialDevices: Device
       <p className="rounded-lg bg-neutral-950 p-3 text-sm text-amber-400">
         This browser doesn&apos;t support push notifications. On iPhone, this needs iOS 16.4+ with
         the site added to your Home Screen (Share → Add to Home Screen), then opened from there.
+        You&apos;ll still get notifications live on this page while it&apos;s open — no setup
+        needed.
       </p>
     );
   }

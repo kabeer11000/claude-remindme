@@ -12,7 +12,7 @@ function getServer(userId: string) {
     {
       title: "Send notification",
       description:
-        "Push a notification to the user's registered phone and/or computer. Use this to let them know you finished a task, hit a blocker, or need their input.",
+        "Notify the user. Pushes to their registered phone/computer, and also appears instantly as a live toast on any open tab of their dashboard. Use this to let them know you finished a task, hit a blocker, or need their input.",
       inputSchema: {
         title: z.string().describe("Short notification title, e.g. 'Build finished'"),
         message: z.string().describe("Notification body text"),
@@ -20,21 +20,11 @@ function getServer(userId: string) {
     },
     async ({ title, message }) => {
       const result = await sendNotificationToUser(userId, title, message);
-      if (result.total === 0) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: "No devices are registered for this account yet. Ask the user to register a device at the dashboard.",
-            },
-          ],
-        };
-      }
-      return {
-        content: [
-          { type: "text", text: `Sent to ${result.sent}/${result.total} registered device(s).` },
-        ],
-      };
+      const pushNote =
+        result.total === 0
+          ? "No push devices registered, but it'll show up live if they have the dashboard open."
+          : `Pushed to ${result.sent}/${result.total} registered device(s).`;
+      return { content: [{ type: "text", text: pushNote }] };
     }
   );
 
