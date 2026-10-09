@@ -49,9 +49,28 @@
   transform-origin: left;
 }
 
+@keyframes cursor-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.animate-cursor-blink {
+  animation: cursor-blink 1s step-end infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-toast-in,
   .animate-toast-out {
     animation-duration: 1ms;
+  }
+  .animate-cursor-blink {
+    animation: none;
+    opacity: 1;
   }
 }

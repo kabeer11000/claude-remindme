@@ -409,11 +409,11 @@ export default function NotificationFeed() {
         {panelOpen && (
           <div
             ref={panelRef}
-            className="animate-toast-in absolute right-0 top-14 flex max-h-[70vh] w-80 flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/95 shadow-2xl shadow-black/50 backdrop-blur"
+            className="animate-toast-in absolute right-0 top-14 flex max-h-[70vh] w-[min(20rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/95 shadow-2xl shadow-black/50 backdrop-blur"
           >
             <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
-              <span className="text-sm font-medium text-neutral-200">Notifications</span>
-              <span className="text-xs text-neutral-500">{history.length} recent</span>
+              <span className="font-mono text-sm font-medium text-emerald-400">~/notifications</span>
+              <span className="font-mono text-xs text-neutral-600">{history.length} recent</span>
             </div>
             <div className="overflow-y-auto">
               {history.length === 0 ? (
@@ -434,7 +434,7 @@ export default function NotificationFeed() {
                       <div className="min-w-0 flex-1">
                         <NotificationBody item={n} onAnswer={submitAnswer} />
                       </div>
-                      <span className="shrink-0 text-xs text-neutral-600">{timeLabel(n.created_at)}</span>
+                      <span className="shrink-0 font-mono text-xs text-neutral-600">{timeLabel(n.created_at)}</span>
                     </li>
                   ))}
                 </ul>
@@ -446,13 +446,14 @@ export default function NotificationFeed() {
                 if (!composerText.trim()) return;
                 sendMessageToAi(composerText.trim());
               }}
-              className="flex gap-2 border-t border-neutral-800 p-3"
+              className="flex items-center gap-2 border-t border-neutral-800 p-3"
             >
+              <span className="shrink-0 font-mono text-sm text-emerald-500">$</span>
               <input
                 value={composerText}
                 onChange={(e) => setComposerText(e.target.value)}
                 placeholder="Message your AI..."
-                className="min-w-0 flex-1 rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-1.5 text-sm outline-none focus:border-emerald-400"
+                className="min-w-0 flex-1 rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-1.5 font-mono text-sm outline-none focus:border-emerald-400"
               />
               <button
                 type="submit"
@@ -468,7 +469,7 @@ export default function NotificationFeed() {
       {/* Heads-up banners: a brief popup under the bell for each new alert,
           phone-style, then it settles into history above. Questions stay up
           (with a reply box) until answered instead of auto-dismissing. */}
-      <div className="pointer-events-none fixed right-4 top-20 z-40 flex w-80 flex-col gap-2">
+      <div className="pointer-events-none fixed right-4 top-20 z-40 flex w-[min(20rem,calc(100vw-2rem))] flex-col gap-2">
         {banners.map((banner) => (
           <div
             key={banner.id}

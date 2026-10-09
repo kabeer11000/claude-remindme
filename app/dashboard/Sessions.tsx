@@ -96,7 +96,10 @@ function SessionCard({ session }: { session: Session }) {
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-neutral-100">{session.label ?? "Session"}</p>
-        <p className="truncate text-sm italic text-neutral-500">{statusLine}</p>
+        <p className={`truncate font-mono text-sm ${active ? "text-emerald-500/80" : "text-neutral-500"}`}>
+          {statusLine}
+          {active && <span className="animate-cursor-blink">▋</span>}
+        </p>
       </div>
     </li>
   );
