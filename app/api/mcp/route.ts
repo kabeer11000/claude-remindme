@@ -1,7 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
-import { getUserIdForApiKey } from "@/lib/apiKeys";
+import { getApiKeyRecord, setKeyStatus } from "@/lib/apiKeys";
+import { popUndeliveredMessages } from "@/lib/messages";
 import { askUser, getQuestion, sendNotificationToUser, waitForAnswer } from "@/lib/push";
 
 // Vercel caps serverless function duration by plan; this is set to the
@@ -10,7 +11,7 @@ import { askUser, getQuestion, sendNotificationToUser, waitForAnswer } from "@/l
 export const maxDuration = 60;
 const ASK_TIMEOUT_MS = 55_000;
 
-function getServer(userId: string) {
+function getServer(userId: string, keyId: string) {
   const server = new McpServer({ name: "claude-remindme", version: "1.0.0" });
 
   server.registerTool(
@@ -87,6 +88,42 @@ function getServer(userId: string) {
     }
   );
 
+  server.registerTool(
+    "check_messages",
+    {
+      title: "Check for messages from the user",
+      description:
+        "Check whether the user has sent you anything new from their dashboard since you last checked -- new instructions, a question, 'stop', anything. Call this periodically during longer tasks, not just when you're stuck, so you notice if they chime in while away from the terminal.",
+      inputSchema: {},
+    },
+    async () => {
+      const messages = await popUndeliveredMessages(userId);
+      if (messages.length === 0) {
+        return { content: [{ type: "text", text: "No new messages." }] };
+      }
+      const text = messages
+        .map((m) => `[${new Date(m.created_at).toLocaleTimeString()}] ${m.body}`)
+        .join("\n");
+      return { content: [{ type: "text", text }] };
+    }
+  );
+
+  server.registerTool(
+    "set_status",
+    {
+      title: "Report what you're doing",
+      description:
+        "Update the short status line the user sees on their dashboard for this session, e.g. 'Running the test suite', 'Reading the auth module', 'Waiting on a slow build'. Call it whenever what you're doing changes, so someone who isn't watching the terminal can tell you're alive and what you're up to.",
+      inputSchema: {
+        status: z.string().max(140).describe("Short, present-tense status"),
+      },
+    },
+    async ({ status }) => {
+      await setKeyStatus(keyId, status);
+      return { content: [{ type: "text", text: "Status updated." }] };
+    }
+  );
+
   return server;
 }
 
@@ -100,8 +137,8 @@ async function handle(request: Request) {
     );
   }
 
-  const userId = await getUserIdForApiKey(apiKey);
-  if (!userId) {
+  const keyRecord = await getApiKeyRecord(apiKey);
+  if (!keyRecord) {
     return Response.json(
       { jsonrpc: "2.0", error: { code: -32001, message: "Invalid API key" }, id: null },
       { status: 401 }
@@ -109,7 +146,7 @@ async function handle(request: Request) {
   }
 
   const transport = new WebStandardStreamableHTTPServerTransport();
-  const server = getServer(userId);
+  const server = getServer(keyRecord.userId, keyRecord.id);
   await server.connect(transport);
   return transport.handleRequest(request);
 }

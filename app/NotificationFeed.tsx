@@ -8,10 +8,11 @@ type Notification = {
   title: string;
   body: string;
   created_at: string;
-  kind: "notification" | "question";
+  kind: "notification" | "question" | "message";
   options: string[] | null;
   answer: string | null;
   answered_at: string | null;
+  sender?: "ai" | "user";
 };
 type Banner = Notification & { exiting: boolean };
 
@@ -113,6 +114,17 @@ function NotificationBody({
   item: Notification;
   onAnswer: (id: number, answer: string) => void;
 }) {
+  if (item.kind === "message") {
+    return (
+      <p className="rounded-lg bg-emerald-500/10 px-2.5 py-1.5 text-sm text-emerald-100">
+        <span className="mr-1.5 text-xs font-medium uppercase tracking-wider text-emerald-400">
+          You
+        </span>
+        {item.body}
+      </p>
+    );
+  }
+
   return (
     <>
       <p className="text-sm font-medium text-neutral-100">{item.title}</p>
@@ -134,6 +146,7 @@ export default function NotificationFeed() {
   const [banners, setBanners] = useState<Banner[]>([]);
   const [panelOpen, setPanelOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [composerText, setComposerText] = useState("");
   const cursorRef = useRef<number | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
@@ -313,6 +326,37 @@ export default function NotificationFeed() {
     }
   }
 
+  async function sendMessageToAi(body: string) {
+    setComposerText("");
+    try {
+      const res = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body }),
+      });
+      if (!res.ok) return;
+      const data: { message: { id: number; body: string; created_at: string } } = await res.json();
+      setHistory((prev) =>
+        [
+          {
+            id: data.message.id,
+            title: "",
+            body: data.message.body,
+            created_at: data.message.created_at,
+            kind: "message" as const,
+            options: null,
+            answer: null,
+            answered_at: null,
+            sender: "user" as const,
+          },
+          ...prev,
+        ].slice(0, HISTORY_LIMIT)
+      );
+    } catch {
+      setComposerText(body);
+    }
+  }
+
   function togglePanel() {
     setPanelOpen((open) => {
       if (!open) setUnreadCount(0);
@@ -379,8 +423,14 @@ export default function NotificationFeed() {
               ) : (
                 <ul className="divide-y divide-neutral-800">
                   {history.map((n) => (
-                    <li key={n.id} className="flex gap-3 px-4 py-3">
-                      <img src="/icon.svg" alt="" className="mt-0.5 h-6 w-6 shrink-0 rounded-md" />
+                    <li key={`${n.kind}-${n.id}`} className="flex gap-3 px-4 py-3">
+                      {n.kind === "message" ? (
+                        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-neutral-800 text-[10px] font-semibold text-neutral-400">
+                          Y
+                        </span>
+                      ) : (
+                        <img src="/icon.svg" alt="" className="mt-0.5 h-6 w-6 shrink-0 rounded-md" />
+                      )}
                       <div className="min-w-0 flex-1">
                         <NotificationBody item={n} onAnswer={submitAnswer} />
                       </div>
@@ -390,6 +440,27 @@ export default function NotificationFeed() {
                 </ul>
               )}
             </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!composerText.trim()) return;
+                sendMessageToAi(composerText.trim());
+              }}
+              className="flex gap-2 border-t border-neutral-800 p-3"
+            >
+              <input
+                value={composerText}
+                onChange={(e) => setComposerText(e.target.value)}
+                placeholder="Message your AI..."
+                className="min-w-0 flex-1 rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-1.5 text-sm outline-none focus:border-emerald-400"
+              />
+              <button
+                type="submit"
+                className="shrink-0 rounded-lg bg-emerald-500 px-3 py-1.5 text-sm font-medium text-neutral-950 transition hover:bg-emerald-400"
+              >
+                Send
+              </button>
+            </form>
           </div>
         )}
       </div>

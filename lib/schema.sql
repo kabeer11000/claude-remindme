@@ -21,7 +21,9 @@ create table if not exists api_keys (
   key_hash text unique not null,
   label text,
   created_at timestamptz not null default now(),
-  last_used_at timestamptz
+  last_used_at timestamptz,
+  status text,
+  status_at timestamptz
 );
 
 create table if not exists notifications (
@@ -37,3 +39,13 @@ create table if not exists notifications (
 );
 
 create index if not exists notifications_user_id_idx on notifications (user_id, id);
+
+create table if not exists messages (
+  id bigserial primary key,
+  user_id uuid not null references users(id) on delete cascade,
+  body text not null,
+  created_at timestamptz not null default now(),
+  delivered_at timestamptz
+);
+
+create index if not exists messages_user_id_idx on messages (user_id, id);

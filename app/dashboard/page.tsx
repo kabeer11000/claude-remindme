@@ -2,9 +2,11 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { auth } from "@/auth";
 import { sql } from "@/lib/db";
+import { listSessions } from "@/lib/apiKeys";
 import PushManager from "./PushManager";
 import McpConnect from "./McpConnect";
 import ScreenSettings from "./ScreenSettings";
+import Sessions from "./Sessions";
 import SignOutButton from "./SignOutButton";
 
 // Always reads the session and queries per-user data; never static.
@@ -62,6 +64,7 @@ export default async function DashboardPage() {
     select id, label, created_at, last_used_at from api_keys
     where user_id = ${userId} order by created_at desc
   `;
+  const sessions = await listSessions(userId);
 
   const mcpUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/api/mcp`;
 
@@ -119,11 +122,9 @@ export default async function DashboardPage() {
           title="Connect your AI"
           description={
             <>
-              Generate a key and add the server to your client. Your AI gets a{" "}
-              <code className="rounded bg-neutral-800 px-1.5 py-0.5 font-mono text-xs text-neutral-200">
-                send_notification
-              </code>{" "}
-              tool it calls when it finishes, gets stuck, or needs you.
+              Generate a key and add the server to your client. Your AI can notify you, ask
+              questions and wait for your reply, check messages you send it, and report what
+              it&apos;s doing.
             </>
           }
         >
@@ -137,6 +138,24 @@ export default async function DashboardPage() {
             }))}
           />
         </Step>
+
+        <section className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-6 sm:p-8">
+          <h2 className="text-xl font-semibold tracking-tight">Your AI sessions</h2>
+          <p className="mt-1 mb-6 text-sm text-neutral-400">
+            Every connected key is a session. Live ones pulse green and show what they&apos;re
+            doing; idle ones show when they were last active.
+          </p>
+          <Sessions
+            initialSessions={sessions.map((s) => ({
+              id: s.id,
+              label: s.label,
+              created_at: s.created_at,
+              last_used_at: s.last_used_at,
+              status: s.status,
+              status_at: s.status_at,
+            }))}
+          />
+        </section>
       </main>
     </div>
   );
