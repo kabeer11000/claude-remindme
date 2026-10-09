@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 
+// Reads the session to switch the CTA; never static.
+export const instant = false;
+
 export default async function Home() {
   const session = await auth();
 

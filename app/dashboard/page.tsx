@@ -4,6 +4,9 @@ import PushManager from "./PushManager";
 import ApiKeys from "./ApiKeys";
 import SignOutButton from "./SignOutButton";
 
+// Always reads the session and queries per-user data; never static.
+export const instant = false;
+
 export default async function DashboardPage() {
   const session = await auth();
   const userId = session!.user.id;
