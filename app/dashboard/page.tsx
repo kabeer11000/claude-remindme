@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { sql } from "@/lib/db";
 import PushManager from "./PushManager";
-import ApiKeys from "./ApiKeys";
+import McpConnect from "./McpConnect";
 import SignOutButton from "./SignOutButton";
 
 // Always reads the session and queries per-user data; never static.
@@ -50,16 +50,12 @@ export default async function DashboardPage() {
       <section className="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-6">
         <h2 className="mb-1 text-lg font-medium">2. Connect your AI via MCP</h2>
         <p className="mb-4 text-sm text-neutral-400">
-          Generate a key, then add this server to Claude (or any MCP client) so it can call{" "}
-          <code className="rounded bg-neutral-800 px-1">send_notification</code>.
+          Generate a key, pick your client below, and paste the command or config in. Your AI gets a{" "}
+          <code className="rounded bg-neutral-800 px-1">send_notification</code> tool it can call
+          whenever it finishes, gets stuck, or needs you.
         </p>
-        <div className="mb-4 rounded-lg bg-neutral-950 p-3 text-xs text-neutral-300">
-          <div>
-            URL: <code>{mcpUrl || "https://<your-deployment>.vercel.app/api/mcp"}</code>
-          </div>
-          <div>Auth header: Authorization: Bearer &lt;your key&gt;</div>
-        </div>
-        <ApiKeys
+        <McpConnect
+          mcpUrl={mcpUrl || "https://<your-deployment>.vercel.app/api/mcp"}
           initialKeys={keys.map((k) => ({
             id: k.id,
             label: k.label,
