@@ -36,15 +36,6 @@
   }
 }
 
-@keyframes backdrop-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
 .animate-toast-in {
   animation: toast-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -58,14 +49,9 @@
   transform-origin: left;
 }
 
-.animate-backdrop-in {
-  animation: backdrop-in 0.25s ease-out both;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .animate-toast-in,
-  .animate-toast-out,
-  .animate-backdrop-in {
+  .animate-toast-out {
     animation-duration: 1ms;
   }
 }

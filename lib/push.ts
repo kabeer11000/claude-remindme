@@ -60,3 +60,13 @@ export async function getLatestNotificationId(userId: string) {
   `;
   return Number(rows[0].id);
 }
+
+export async function getRecentNotifications(userId: string, limit = 30) {
+  const { rows } = await sql`
+    select id, title, body, created_at from notifications
+    where user_id = ${userId}
+    order by id desc
+    limit ${limit}
+  `;
+  return rows as { id: number; title: string; body: string; created_at: string }[];
+}

@@ -1,19 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PREFS_CHANGED_EVENT, getSoundEnabled, getWakeLockEnabled } from "@/lib/notificationPrefs";
 
 type Notification = { id: number; title: string; body: string; created_at: string };
-type Toast = Notification & { exiting: boolean };
+type Banner = Notification & { exiting: boolean };
 
 const POLL_MS = 4000;
-const DISMISS_MS = 10000;
+const BANNER_MS = 6000;
 const EXIT_MS = 250;
+const HISTORY_LIMIT = 30;
 
-function dismissToasts(setToasts: Dispatch<SetStateAction<Toast[]>>, ids: number[]) {
-  const hit = (t: Toast) => ids.includes(t.id);
-  setToasts((prev) => prev.map((t) => (hit(t) ? { ...t, exiting: true } : t)));
-  setTimeout(() => setToasts((prev) => prev.filter((t) => !hit(t))), EXIT_MS);
+function timeLabel(iso: string) {
+  return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
 function playBeep(ctx: AudioContext) {
@@ -38,11 +37,44 @@ function playBeep(ctx: AudioContext) {
 }
 
 export default function NotificationFeed() {
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [history, setHistory] = useState<Notification[]>([]);
+  const [banners, setBanners] = useState<Banner[]>([]);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const cursorRef = useRef<number | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  // Load notification history once on mount, for the notification-center panel.
+  useEffect(() => {
+    fetch("/api/notifications/history")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { notifications: Notification[] } | null) => {
+        if (data) setHistory(data.notifications);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Close the panel on an outside click or Escape.
+  useEffect(() => {
+    if (!panelOpen) return;
+    function onPointerDown(e: PointerEvent) {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setPanelOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setPanelOpen(false);
+    }
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [panelOpen]);
 
   // Audio needs a user gesture before it's allowed to play -- grab the first
   // click/keypress anywhere on the page to unlock it ahead of time.
@@ -135,10 +167,25 @@ export default function NotificationFeed() {
             const isFirstLoad = cursorRef.current === null;
             cursorRef.current = data.cursor;
             if (data.notifications.length > 0 && !isFirstLoad) {
-              const fresh = data.notifications.map((n) => ({ ...n, exiting: false }));
-              setToasts((prev) => [...prev, ...fresh]);
-              const ids = fresh.map((n) => n.id);
-              setTimeout(() => dismissToasts(setToasts, ids), DISMISS_MS);
+              setHistory((prev) => [...data.notifications].reverse().concat(prev).slice(0, HISTORY_LIMIT));
+
+              const fresh: Banner[] = data.notifications.map((n) => ({ ...n, exiting: false }));
+              setBanners((prev) => [...prev, ...fresh]);
+              fresh.forEach((n) => {
+                setTimeout(() => {
+                  setBanners((prev) =>
+                    prev.map((b) => (b.id === n.id ? { ...b, exiting: true } : b))
+                  );
+                  setTimeout(() => {
+                    setBanners((prev) => prev.filter((b) => b.id !== n.id));
+                  }, EXIT_MS);
+                }, BANNER_MS);
+              });
+
+              setPanelOpen((open) => {
+                if (!open) setUnreadCount((count) => count + fresh.length);
+                return open;
+              });
 
               if (getSoundEnabled() && audioCtxRef.current) {
                 playBeep(audioCtxRef.current);
@@ -159,89 +206,121 @@ export default function NotificationFeed() {
     };
   }, []);
 
-  const visible = toasts.some((t) => !t.exiting);
-  const dismissAll = () => dismissToasts(setToasts, toasts.map((t) => t.id));
+  function togglePanel() {
+    setPanelOpen((open) => {
+      if (!open) setUnreadCount(0);
+      return !open;
+    });
+  }
 
-  useEffect(() => {
-    if (!visible) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") dismissToasts(setToasts, toasts.map((t) => t.id));
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [visible, toasts]);
-
-  // Hidden muted/looping video: the no-Wake-Lock-API fallback for keeping the
-  // screen awake (see the effect above). Must stay mounted regardless of
-  // whether a toast is showing, since the wake-lock toggle is independent.
-  const wakeLockVideo = (
-    <video
-      ref={videoRef}
-      src="/nosleep.mp4"
-      muted
-      loop
-      playsInline
-      aria-hidden
-      className="fixed h-px w-px opacity-0"
-    />
-  );
-
-  if (toasts.length === 0) return wakeLockVideo;
-
-  // Centered on purpose: this feed exists for devices without OS push, so an
-  // in-page alert is the *only* signal the user gets. A corner toast is easy
-  // to miss on a glance at the screen; a dimmed, centered card is not.
   return (
     <>
-      {wakeLockVideo}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
+      <video
+        ref={videoRef}
+        src="/nosleep.mp4"
+        muted
+        loop
+        playsInline
         aria-hidden
-        onClick={dismissAll}
-        className={`absolute inset-0 bg-neutral-950/70 backdrop-blur-sm ${
-          visible ? "animate-backdrop-in" : "opacity-0"
-        }`}
+        className="fixed h-px w-px opacity-0"
       />
-      <div className="relative flex w-full max-w-md flex-col gap-3" role="alert" aria-live="assertive">
-        {toasts.map((toast) => (
+
+      {/* Phone-style status-bar bell: always visible, opens the notification
+          center below it. This replaces a full-screen takeover dialog -- the
+          goal is a glanceable signal plus a place to review history, not an
+          interruption every time. */}
+      <div className="fixed right-4 top-4 z-50">
+        <button
+          onClick={togglePanel}
+          aria-label="Notifications"
+          aria-expanded={panelOpen}
+          className={`relative flex h-11 w-11 items-center justify-center rounded-full border backdrop-blur transition ${
+            panelOpen
+              ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
+              : "border-neutral-800 bg-neutral-900/90 text-neutral-300 hover:border-neutral-600"
+          }`}
+        >
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path
+              d="M6 8a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5h-15S6 12 6 8Z"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path d="M9.5 16.5a2.5 2.5 0 0 0 5 0" strokeLinecap="round" />
+          </svg>
+          {unreadCount > 0 && (
+            <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1 text-[11px] font-semibold text-neutral-950">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </button>
+
+        {panelOpen && (
           <div
-            key={toast.id}
-            className={`overflow-hidden rounded-2xl border border-emerald-500/40 bg-neutral-900 shadow-2xl shadow-emerald-500/10 ring-1 ring-black/40 ${
-              toast.exiting ? "animate-toast-out" : "animate-toast-in"
+            ref={panelRef}
+            className="animate-toast-in absolute right-0 top-14 flex max-h-[70vh] w-80 flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/95 shadow-2xl shadow-black/50 backdrop-blur"
+          >
+            <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
+              <span className="text-sm font-medium text-neutral-200">Notifications</span>
+              <span className="text-xs text-neutral-500">{history.length} recent</span>
+            </div>
+            <div className="overflow-y-auto">
+              {history.length === 0 ? (
+                <p className="px-4 py-8 text-center text-sm text-neutral-500">
+                  Nothing yet. Your AI&apos;s alerts will show up here.
+                </p>
+              ) : (
+                <ul className="divide-y divide-neutral-800">
+                  {history.map((n) => (
+                    <li key={n.id} className="flex gap-3 px-4 py-3">
+                      <img src="/icon.svg" alt="" className="mt-0.5 h-6 w-6 shrink-0 rounded-md" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-neutral-100">{n.title}</p>
+                        {n.body && <p className="mt-0.5 text-sm text-neutral-400">{n.body}</p>}
+                      </div>
+                      <span className="shrink-0 text-xs text-neutral-600">{timeLabel(n.created_at)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Heads-up banners: a brief, dismissable popup under the bell for each
+          new alert, phone-style, then it settles into history above. */}
+      <div className="pointer-events-none fixed right-4 top-20 z-40 flex w-80 flex-col gap-2">
+        {banners.map((banner) => (
+          <div
+            key={banner.id}
+            className={`pointer-events-auto overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/95 shadow-xl shadow-black/40 backdrop-blur ${
+              banner.exiting ? "animate-toast-out" : "animate-toast-in"
             }`}
           >
-            <div className="flex items-start gap-4 p-5">
-              <img src="/icon.svg" alt="" className="h-11 w-11 shrink-0 rounded-xl" />
+            <button
+              onClick={() => {
+                setBanners((prev) => prev.map((b) => (b.id === banner.id ? { ...b, exiting: true } : b)));
+                setTimeout(() => setBanners((prev) => prev.filter((b) => b.id !== banner.id)), EXIT_MS);
+              }}
+              className="flex w-full items-start gap-3 p-3 text-left"
+            >
+              <img src="/icon.svg" alt="" className="mt-0.5 h-8 w-8 shrink-0 rounded-lg" />
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium uppercase tracking-wider text-emerald-400">
-                  Claude RemindMe
-                </p>
-                <p className="mt-1 text-lg font-semibold leading-snug text-white">{toast.title}</p>
-                {toast.body && <p className="mt-1 text-sm text-neutral-300">{toast.body}</p>}
+                <p className="text-sm font-medium text-neutral-100">{banner.title}</p>
+                {banner.body && <p className="text-sm text-neutral-400">{banner.body}</p>}
               </div>
-            </div>
-            <div className="flex items-center justify-between gap-3 border-t border-neutral-800 px-5 py-3">
-              <span className="text-xs text-neutral-500">
-                {new Date(toast.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-              </span>
-              <button
-                onClick={() => dismissToasts(setToasts, [toast.id])}
-                className="rounded-full bg-white px-4 py-1.5 text-sm font-medium text-neutral-950 transition hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
-              >
-                Got it
-              </button>
-            </div>
-            {!toast.exiting && (
-              <div className="h-1 w-full bg-neutral-800">
+            </button>
+            {!banner.exiting && (
+              <div className="h-0.5 w-full bg-neutral-800">
                 <div
                   className="h-full bg-emerald-400 animate-toast-progress"
-                  style={{ animationDuration: `${DISMISS_MS}ms` }}
+                  style={{ animationDuration: `${BANNER_MS}ms` }}
                 />
               </div>
             )}
           </div>
         ))}
-      </div>
       </div>
     </>
   );
