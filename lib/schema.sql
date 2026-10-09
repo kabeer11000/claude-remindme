@@ -29,7 +29,11 @@ create table if not exists notifications (
   user_id uuid not null references users(id) on delete cascade,
   title text not null,
   body text not null,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  kind text not null default 'notification',
+  options jsonb,
+  answer text,
+  answered_at timestamptz
 );
 
 create index if not exists notifications_user_id_idx on notifications (user_id, id);

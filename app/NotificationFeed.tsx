@@ -3,11 +3,21 @@
 import { useEffect, useRef, useState } from "react";
 import { PREFS_CHANGED_EVENT, getSoundEnabled, getWakeLockEnabled } from "@/lib/notificationPrefs";
 
-type Notification = { id: number; title: string; body: string; created_at: string };
+type Notification = {
+  id: number;
+  title: string;
+  body: string;
+  created_at: string;
+  kind: "notification" | "question";
+  options: string[] | null;
+  answer: string | null;
+  answered_at: string | null;
+};
 type Banner = Notification & { exiting: boolean };
 
 const POLL_MS = 4000;
 const BANNER_MS = 6000;
+const ANSWERED_BANNER_MS = 2500;
 const EXIT_MS = 250;
 const HISTORY_LIMIT = 30;
 
@@ -34,6 +44,89 @@ function playBeep(ctx: AudioContext) {
   osc2.connect(gain);
   osc2.start(ctx.currentTime + 0.12);
   osc2.stop(ctx.currentTime + 0.4);
+}
+
+function QuestionForm({
+  options,
+  onSubmit,
+}: {
+  options: string[] | null;
+  onSubmit: (answer: string) => void;
+}) {
+  const [text, setText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  function send(answer: string) {
+    if (!answer.trim() || submitting) return;
+    setSubmitting(true);
+    onSubmit(answer.trim());
+  }
+
+  if (options && options.length > 0) {
+    return (
+      <div className="mt-2 flex flex-wrap gap-2">
+        {options.map((opt) => (
+          <button
+            key={opt}
+            onClick={() => send(opt)}
+            disabled={submitting}
+            className="rounded-full border border-emerald-500/40 px-3 py-1.5 text-sm text-emerald-200 transition hover:bg-emerald-500/10 disabled:opacity-50"
+          >
+            {opt}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        send(text);
+      }}
+      className="mt-2 flex gap-2"
+    >
+      <input
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Type a reply..."
+        disabled={submitting}
+        autoFocus
+        className="min-w-0 flex-1 rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-1.5 text-sm outline-none focus:border-emerald-400 disabled:opacity-50"
+      />
+      <button
+        type="submit"
+        disabled={submitting}
+        className="shrink-0 rounded-lg bg-emerald-500 px-3 py-1.5 text-sm font-medium text-neutral-950 transition hover:bg-emerald-400 disabled:opacity-50"
+      >
+        Send
+      </button>
+    </form>
+  );
+}
+
+function NotificationBody({
+  item,
+  onAnswer,
+}: {
+  item: Notification;
+  onAnswer: (id: number, answer: string) => void;
+}) {
+  return (
+    <>
+      <p className="text-sm font-medium text-neutral-100">{item.title}</p>
+      {item.body && <p className="text-sm text-neutral-400">{item.body}</p>}
+      {item.kind === "question" &&
+        (item.answered_at ? (
+          <p className="mt-2 rounded-lg bg-neutral-800/60 px-2.5 py-1.5 text-sm text-emerald-300">
+            You replied: {item.answer}
+          </p>
+        ) : (
+          <QuestionForm options={item.options} onSubmit={(answer) => onAnswer(item.id, answer)} />
+        ))}
+    </>
+  );
 }
 
 export default function NotificationFeed() {
@@ -146,6 +239,11 @@ export default function NotificationFeed() {
     };
   }, []);
 
+  function removeBanner(id: number) {
+    setBanners((prev) => prev.map((b) => (b.id === id ? { ...b, exiting: true } : b)));
+    setTimeout(() => setBanners((prev) => prev.filter((b) => b.id !== id)), EXIT_MS);
+  }
+
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
@@ -171,16 +269,8 @@ export default function NotificationFeed() {
 
               const fresh: Banner[] = data.notifications.map((n) => ({ ...n, exiting: false }));
               setBanners((prev) => [...prev, ...fresh]);
-              fresh.forEach((n) => {
-                setTimeout(() => {
-                  setBanners((prev) =>
-                    prev.map((b) => (b.id === n.id ? { ...b, exiting: true } : b))
-                  );
-                  setTimeout(() => {
-                    setBanners((prev) => prev.filter((b) => b.id !== n.id));
-                  }, EXIT_MS);
-                }, BANNER_MS);
-              });
+              // Questions stay up until answered; plain notifications auto-dismiss.
+              fresh.filter((n) => n.kind !== "question").forEach((n) => setTimeout(() => removeBanner(n.id), BANNER_MS));
 
               setPanelOpen((open) => {
                 if (!open) setUnreadCount((count) => count + fresh.length);
@@ -205,6 +295,23 @@ export default function NotificationFeed() {
       clearTimeout(timer);
     };
   }, []);
+
+  async function submitAnswer(id: number, answer: string) {
+    try {
+      const res = await fetch(`/api/notifications/${id}/answer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answer }),
+      });
+      if (!res.ok) return;
+      const data: { notification: Notification } = await res.json();
+      setHistory((prev) => prev.map((n) => (n.id === id ? data.notification : n)));
+      setBanners((prev) => prev.map((b) => (b.id === id ? { ...b, ...data.notification } : b)));
+      setTimeout(() => removeBanner(id), ANSWERED_BANNER_MS);
+    } catch {
+      // Leave the form up so they can retry.
+    }
+  }
 
   function togglePanel() {
     setPanelOpen((open) => {
@@ -275,8 +382,7 @@ export default function NotificationFeed() {
                     <li key={n.id} className="flex gap-3 px-4 py-3">
                       <img src="/icon.svg" alt="" className="mt-0.5 h-6 w-6 shrink-0 rounded-md" />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-neutral-100">{n.title}</p>
-                        {n.body && <p className="mt-0.5 text-sm text-neutral-400">{n.body}</p>}
+                        <NotificationBody item={n} onAnswer={submitAnswer} />
                       </div>
                       <span className="shrink-0 text-xs text-neutral-600">{timeLabel(n.created_at)}</span>
                     </li>
@@ -288,30 +394,33 @@ export default function NotificationFeed() {
         )}
       </div>
 
-      {/* Heads-up banners: a brief, dismissable popup under the bell for each
-          new alert, phone-style, then it settles into history above. */}
+      {/* Heads-up banners: a brief popup under the bell for each new alert,
+          phone-style, then it settles into history above. Questions stay up
+          (with a reply box) until answered instead of auto-dismissing. */}
       <div className="pointer-events-none fixed right-4 top-20 z-40 flex w-80 flex-col gap-2">
         {banners.map((banner) => (
           <div
             key={banner.id}
-            className={`pointer-events-auto overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/95 shadow-xl shadow-black/40 backdrop-blur ${
-              banner.exiting ? "animate-toast-out" : "animate-toast-in"
-            }`}
+            className={`pointer-events-auto overflow-hidden rounded-xl border bg-neutral-900/95 shadow-xl shadow-black/40 backdrop-blur ${
+              banner.kind === "question" ? "border-emerald-500/40" : "border-neutral-800"
+            } ${banner.exiting ? "animate-toast-out" : "animate-toast-in"}`}
           >
-            <button
-              onClick={() => {
-                setBanners((prev) => prev.map((b) => (b.id === banner.id ? { ...b, exiting: true } : b)));
-                setTimeout(() => setBanners((prev) => prev.filter((b) => b.id !== banner.id)), EXIT_MS);
-              }}
-              className="flex w-full items-start gap-3 p-3 text-left"
-            >
+            <div className="flex items-start gap-3 p-3">
               <img src="/icon.svg" alt="" className="mt-0.5 h-8 w-8 shrink-0 rounded-lg" />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-neutral-100">{banner.title}</p>
-                {banner.body && <p className="text-sm text-neutral-400">{banner.body}</p>}
+                <NotificationBody item={banner} onAnswer={submitAnswer} />
               </div>
-            </button>
-            {!banner.exiting && (
+              <button
+                onClick={() => removeBanner(banner.id)}
+                aria-label="Dismiss"
+                className="shrink-0 rounded-full p-1 text-neutral-600 transition hover:bg-neutral-800 hover:text-neutral-300"
+              >
+                <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+            {!banner.exiting && banner.kind !== "question" && (
               <div className="h-0.5 w-full bg-neutral-800">
                 <div
                   className="h-full bg-emerald-400 animate-toast-progress"
