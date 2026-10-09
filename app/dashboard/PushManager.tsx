@@ -29,15 +29,15 @@ export default function PushManager({ initialDevices }: { initialDevices: Device
   const [testStatus, setTestStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
 
   useEffect(() => {
-    const ok =
-      typeof window !== "undefined" &&
-      "serviceWorker" in navigator &&
-      "PushManager" in window &&
-      "Notification" in window;
-    setSupported(ok);
-    if (!ok) return;
-
     (async () => {
+      const ok =
+        typeof window !== "undefined" &&
+        "serviceWorker" in navigator &&
+        "PushManager" in window &&
+        "Notification" in window;
+      setSupported(ok);
+      if (!ok) return;
+
       try {
         const registration = await navigator.serviceWorker.register("/sw.js");
         const ready = await navigator.serviceWorker.ready;
@@ -119,6 +119,7 @@ export default function PushManager({ initialDevices }: { initialDevices: Device
       });
       setDevices((d) => d.filter((dev) => dev.endpoint !== endpoint));
 
+      if (!("serviceWorker" in navigator)) return;
       const registration = await navigator.serviceWorker.getRegistration();
       const existing = await registration?.pushManager.getSubscription();
       if (existing?.endpoint === endpoint) {
@@ -130,83 +131,85 @@ export default function PushManager({ initialDevices }: { initialDevices: Device
     }
   }
 
-  if (supported === null) return null;
+  if (supported === null) return <div className="h-12" />;
 
-  if (!supported) {
-    return (
-      <p className="rounded-lg bg-neutral-950 p-3 text-sm text-amber-400">
-        This browser doesn&apos;t support push notifications. On iPhone, this needs iOS 16.4+ with
-        the site added to your Home Screen (Share → Add to Home Screen), then opened from there.
-        You&apos;ll still get notifications live on this page while it&apos;s open — no setup
-        needed.
-      </p>
-    );
-  }
+  const testLabel =
+    testStatus === "sending"
+      ? "Sending..."
+      : testStatus === "sent"
+        ? "Sent. Check your notifications"
+        : testStatus === "error"
+          ? "Failed, try again"
+          : "Send a test";
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
-        {subscribed ? (
-          <span className="inline-flex items-center gap-2 rounded-full border border-emerald-800 bg-emerald-950/40 px-4 py-2 text-sm text-emerald-400">
-            <span className="h-2 w-2 rounded-full bg-emerald-400" />
-            This device is registered
+    <div className="flex flex-col gap-5">
+      {!supported ? (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm">
+          <p className="font-medium text-amber-300">No system push in this browser</p>
+          <p className="mt-1 text-amber-200/80">
+            You&apos;ll still get alerts on this page while it&apos;s open. For real push on
+            iPhone, use iOS 16.4+, add this site to your Home Screen (Share, then Add to Home
+            Screen), and open it from there.
+          </p>
+        </div>
+      ) : subscribed ? (
+        <div className="flex flex-col gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <span className="flex items-center gap-2.5 text-sm font-medium text-emerald-300">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
+            </span>
+            This device is receiving push alerts
           </span>
-        ) : (
-          <button
-            onClick={enableNotifications}
-            disabled={busy}
-            className="w-fit rounded-full bg-white px-4 py-2 text-sm font-medium text-neutral-950 transition hover:bg-neutral-200 disabled:opacity-50"
-          >
-            {busy ? "Enabling..." : "Enable notifications"}
-          </button>
-        )}
-
-        {subscribed && (
           <button
             onClick={sendTestNotification}
             disabled={testStatus === "sending"}
-            className="w-fit rounded-full border border-neutral-700 px-4 py-2 text-sm transition hover:border-neutral-500 disabled:opacity-50"
+            className={`w-fit rounded-full border px-4 py-2 text-sm font-medium transition disabled:opacity-50 ${
+              testStatus === "error"
+                ? "border-red-500/50 text-red-300"
+                : "border-emerald-500/40 text-emerald-200 hover:border-emerald-400 hover:bg-emerald-500/10"
+            }`}
           >
-            {testStatus === "sending"
-              ? "Sending..."
-              : testStatus === "sent"
-                ? "Sent — check your notifications"
-                : testStatus === "error"
-                  ? "Failed, try again"
-                  : "Send test notification"}
+            {testLabel}
           </button>
-        )}
-      </div>
-
-      {error && <p className="text-sm text-red-400">{error}</p>}
-
-      <div className="flex items-start gap-3 rounded-lg border border-neutral-800 bg-neutral-950 p-3">
-        <img src="/icon.svg" alt="" className="mt-0.5 h-8 w-8 rounded-md" />
-        <div className="text-sm">
-          <p className="font-medium text-neutral-200">Claude RemindMe</p>
-          <p className="text-neutral-500">Your AI sent a notification.</p>
         </div>
-        <span className="ml-auto shrink-0 text-xs text-neutral-600">preview</span>
-      </div>
+      ) : (
+        <button
+          onClick={enableNotifications}
+          disabled={busy}
+          className="w-full rounded-xl bg-white px-5 py-3.5 text-base font-semibold text-neutral-950 shadow-lg shadow-white/5 transition hover:bg-neutral-200 disabled:opacity-50 sm:w-fit"
+        >
+          {busy ? "Enabling..." : "Enable notifications on this device"}
+        </button>
+      )}
+
+      {error && (
+        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          {error}
+        </p>
+      )}
 
       {devices.length > 0 && (
-        <ul className="flex flex-col gap-2">
-          {devices.map((d) => (
-            <li
-              key={d.id}
-              className="flex items-center justify-between rounded-lg bg-neutral-950 px-3 py-2 text-sm"
-            >
-              <span>{d.label ?? "Device"}</span>
-              <button
-                onClick={() => removeDevice(d.endpoint)}
-                disabled={busy}
-                className="text-neutral-500 hover:text-red-400"
-              >
-                Remove
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div>
+          <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-neutral-500">
+            Registered devices ({devices.length})
+          </h3>
+          <ul className="divide-y divide-neutral-800 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950">
+            {devices.map((d) => (
+              <li key={d.id} className="flex items-center justify-between px-4 py-3 text-sm">
+                <span className="text-neutral-200">{d.label ?? "Device"}</span>
+                <button
+                  onClick={() => removeDevice(d.endpoint)}
+                  disabled={busy}
+                  className="rounded-md px-2 py-1 text-neutral-500 transition hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

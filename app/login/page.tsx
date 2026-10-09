@@ -39,22 +39,26 @@ function LoginForm() {
       <h1 className="mb-1 text-2xl font-semibold">Welcome back</h1>
       <p className="mb-6 text-sm text-neutral-400">Sign in to manage your devices.</p>
 
-      <label className="mb-1 block text-sm text-neutral-300">Email</label>
+      <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-neutral-300">Email</label>
       <input
+        id="email"
         type="email"
+        autoComplete="email"
         required
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        className="mb-4 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 outline-none focus:border-neutral-400"
+        className="mb-4 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20"
       />
 
-      <label className="mb-1 block text-sm text-neutral-300">Password</label>
+      <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-neutral-300">Password</label>
       <input
+        id="password"
         type="password"
+        autoComplete="current-password"
         required
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        className="mb-4 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 outline-none focus:border-neutral-400"
+        className="mb-4 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20"
       />
 
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
@@ -79,7 +83,11 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <main className="flex flex-1 items-center justify-center px-6 py-16">
+    <main className="flex flex-1 flex-col items-center justify-center px-6 py-16">
+      <Link href="/" className="mb-8 flex items-center gap-2.5">
+        <img src="/icon.svg" alt="" className="h-8 w-8 rounded-lg" />
+        <span className="font-semibold">Claude RemindMe</span>
+      </Link>
       <Suspense>
         <LoginForm />
       </Suspense>

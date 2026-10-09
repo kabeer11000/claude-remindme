@@ -1,53 +1,29 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
 }
 
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(-16px) scale(0.95);
-    filter: blur(2px);
+    transform: translateY(12px) scale(0.92);
   }
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
-    filter: blur(0);
   }
 }
 
 @keyframes toast-out {
   from {
     opacity: 1;
-    transform: translateY(0) scale(1);
-    max-height: 120px;
+    transform: scale(1);
   }
   to {
     opacity: 0;
-    transform: translateY(-8px) scale(0.97);
-    max-height: 0;
+    transform: scale(0.96);
   }
 }
 
@@ -60,15 +36,36 @@ body {
   }
 }
 
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .animate-toast-in {
-  animation: toast-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: toast-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .animate-toast-out {
-  animation: toast-out 0.3s cubic-bezier(0.4, 0, 1, 1) both;
+  animation: toast-out 0.25s cubic-bezier(0.4, 0, 1, 1) both;
 }
 
 .animate-toast-progress {
   animation: toast-progress linear both;
   transform-origin: left;
+}
+
+.animate-backdrop-in {
+  animation: backdrop-in 0.25s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-toast-in,
+  .animate-toast-out,
+  .animate-backdrop-in {
+    animation-duration: 1ms;
+  }
 }

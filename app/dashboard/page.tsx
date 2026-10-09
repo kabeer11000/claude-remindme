@@ -1,11 +1,54 @@
+import Link from "next/link";
+import type { ReactNode } from "react";
 import { auth } from "@/auth";
 import { sql } from "@/lib/db";
 import PushManager from "./PushManager";
 import McpConnect from "./McpConnect";
+import ScreenSettings from "./ScreenSettings";
 import SignOutButton from "./SignOutButton";
 
 // Always reads the session and queries per-user data; never static.
 export const instant = false;
+
+function Step({
+  n,
+  done,
+  title,
+  description,
+  children,
+}: {
+  n: number;
+  done: boolean;
+  title: string;
+  description: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-6 sm:p-8">
+      <div className="mb-6 flex items-start gap-4">
+        <span
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
+            done ? "bg-emerald-500 text-neutral-950" : "bg-white text-neutral-950"
+          }`}
+          aria-label={done ? `Step ${n}, done` : `Step ${n}`}
+        >
+          {done ? (
+            <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+              <path d="M3.5 8.5l3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          ) : (
+            n
+          )}
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
+          <p className="mt-1 text-sm text-neutral-400">{description}</p>
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -23,47 +66,78 @@ export default async function DashboardPage() {
   const mcpUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/api/mcp`;
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-10 px-6 py-12">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Dashboard</h1>
-          <p className="text-sm text-neutral-400">{session!.user.email}</p>
+    <div className="flex flex-1 flex-col">
+      <header className="border-b border-neutral-900">
+        <div className="mx-auto flex w-full max-w-2xl items-center justify-between gap-4 px-6 py-4">
+          <Link href="/" className="flex items-center gap-2.5">
+            <img src="/icon.svg" alt="" className="h-7 w-7 rounded-lg" />
+            <span className="font-semibold">Claude RemindMe</span>
+          </Link>
+          <div className="flex items-center gap-4">
+            <span className="hidden truncate text-sm text-neutral-500 sm:inline">
+              {session!.user.email}
+            </span>
+            <SignOutButton />
+          </div>
         </div>
-        <SignOutButton />
       </header>
 
-      <section className="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-6">
-        <h2 className="mb-1 text-lg font-medium">1. Register this device</h2>
-        <p className="mb-4 text-sm text-neutral-400">
-          Do this on every device you want notifications on — your Windows laptop, and your phone
-          if its browser supports it.
-        </p>
-        <PushManager
-          initialDevices={devices.map((d) => ({
-            id: d.id,
-            endpoint: d.endpoint,
-            label: d.device_label,
-          }))}
-        />
-      </section>
+      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-6 py-10">
+        <div className="mb-2">
+          <h1 className="text-3xl font-semibold tracking-tight">Set up in two steps</h1>
+          <p className="mt-2 text-neutral-400">
+            Turn on alerts for this device, then give your AI the key to reach you.
+          </p>
+        </div>
 
-      <section className="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-6">
-        <h2 className="mb-1 text-lg font-medium">2. Connect your AI via MCP</h2>
-        <p className="mb-4 text-sm text-neutral-400">
-          Generate a key, pick your client below, and paste the command or config in. Your AI gets a{" "}
-          <code className="rounded bg-neutral-800 px-1">send_notification</code> tool it can call
-          whenever it finishes, gets stuck, or needs you.
-        </p>
-        <McpConnect
-          mcpUrl={mcpUrl || "https://<your-deployment>.vercel.app/api/mcp"}
-          initialKeys={keys.map((k) => ({
-            id: k.id,
-            label: k.label,
-            createdAt: k.created_at,
-            lastUsedAt: k.last_used_at,
-          }))}
-        />
-      </section>
-    </main>
+        <Step
+          n={1}
+          done={devices.length > 0}
+          title="Turn on alerts for this device"
+          description="Repeat on every device you want pinged: your laptop, your phone, anything with a browser."
+        >
+          <PushManager
+            initialDevices={devices.map((d) => ({
+              id: d.id,
+              endpoint: d.endpoint,
+              label: d.device_label,
+            }))}
+          />
+
+          <div className="mt-8 border-t border-neutral-800 pt-6">
+            <h3 className="text-sm font-medium text-neutral-200">While a RemindMe tab is open</h3>
+            <p className="mb-3 mt-1 text-sm text-neutral-500">
+              Alerts also pop up in the middle of this page. Saved per browser.
+            </p>
+            <ScreenSettings />
+          </div>
+        </Step>
+
+        <Step
+          n={2}
+          done={keys.length > 0}
+          title="Connect your AI"
+          description={
+            <>
+              Generate a key and add the server to your client. Your AI gets a{" "}
+              <code className="rounded bg-neutral-800 px-1.5 py-0.5 font-mono text-xs text-neutral-200">
+                send_notification
+              </code>{" "}
+              tool it calls when it finishes, gets stuck, or needs you.
+            </>
+          }
+        >
+          <McpConnect
+            mcpUrl={mcpUrl || "https://<your-deployment>.vercel.app/api/mcp"}
+            initialKeys={keys.map((k) => ({
+              id: k.id,
+              label: k.label,
+              createdAt: k.created_at,
+              lastUsedAt: k.last_used_at,
+            }))}
+          />
+        </Step>
+      </main>
+    </div>
   );
 }

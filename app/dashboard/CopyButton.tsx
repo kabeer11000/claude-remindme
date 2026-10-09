@@ -14,9 +14,13 @@ export default function CopyButton({ text, label = "Copy" }: { text: string; lab
   return (
     <button
       onClick={onCopy}
-      className="shrink-0 rounded-md border border-neutral-700 px-2.5 py-1 text-xs text-neutral-300 transition hover:border-neutral-500 hover:text-white"
+      className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-medium transition ${
+        copied
+          ? "bg-emerald-500 text-neutral-950"
+          : "bg-neutral-800 text-neutral-100 hover:bg-neutral-700"
+      }`}
     >
-      {copied ? "Copied!" : label}
+      {copied ? "Copied" : label}
     </button>
   );
 }
