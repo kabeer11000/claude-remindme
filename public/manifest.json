@@ -1,0 +1,10 @@
+{
+  "name": "Claude RemindMe",
+  "short_name": "RemindMe",
+  "description": "Get notified on your devices when your AI assistant needs you.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#171717",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
